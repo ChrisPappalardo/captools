@@ -1,0 +1,43 @@
+#!/bin/sh
+#
+# mbp-gather - gathers benchmarking and profiling information from a MySQL server
+#
+# Copyright (C) 2014 by Chris Pappalardo (cpappala@yahoo.com)
+#
+# Some elements originally published in High Performance MySQL (3rd edition), Schwartz
+# Copyright (C) 2012 Baron Schwartz, et al
+
+# set variables
+UID=${1:-$USER} # arg 1 or none
+PWD=${2:-} # arg 2 or none
+if [ ! -z "$UID" ]; then
+    UID="-u $UID"
+fi
+if [ ! -z "$PWD" ]; then
+    PWD="-p$PWD"
+fi
+INTERVAL=5
+PREFIX=$INTERVAL-sec-status
+RUNFILE=mbp-gather-runfile
+
+# print config
+mysql $UID $PWD -e 'SHOW GLOBAL VARIABLES' >> mysql-variables
+
+# main loop
+while test -e $RUNFILE; do
+   file=$(date +%F_%I)
+   sleep=$(date +%s.%N | awk "{print $INTERVAL - (\$1 % $INTERVAL)}")
+   sleep $sleep
+   ts="$(date +"TS %s.%N %F %T")"
+   loadavg="$(uptime)"
+   echo "$ts $loadavg" >> $PREFIX-${file}-status
+   mysql $UID $PWD -e 'SHOW GLOBAL STATUS' >> $PREFIX-${file}-status &
+   echo "$ts $loadavg" >> $PREFIX-${file}-innodbstatus
+   mysql $UID $PWD -e 'SHOW ENGINE INNODB STATUS\G' >> $PREFIX-${file}-innodbstatus &
+   echo "$ts $loadavg" >> $PREFIX-${file}-processlist
+   mysql $UID $PWD -e 'SHOW FULL PROCESSLIST\G' >> $PREFIX-${file}-processlist &
+   echo $ts
+done
+
+# otherwise print that runfile does not exist
+echo Exiting because $RUNFILE does not exist.
