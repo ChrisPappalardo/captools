@@ -20,8 +20,12 @@ INTERVAL=5
 PREFIX=$INTERVAL-sec-status
 RUNFILE=mbp-gather-runfile
 
-# print config
+# get and store mysql config
 mysql $UID $PWD -e 'SHOW GLOBAL VARIABLES' >> mysql-variables
+
+# start tcpdump
+tcpdumpstart=$(date +%F_%I)
+sudo tcpdump -s 65535 -x -nn -q -tttt -i any -c 1000 port 3306 >> ${tcpdumpstart}-tcpdump 2>/dev/null &
 
 # main loop
 while test -e $RUNFILE; do
@@ -54,5 +58,8 @@ while test -e $RUNFILE; do
 
 done
 
-# otherwise print that runfile does not exist
+# end tcpdump
+sudo pkill -u root tcpdump
+
+# exit and print that runfile does not(no longer) exist(s)
 echo Exiting because $RUNFILE does not exist.
