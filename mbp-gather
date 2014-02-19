@@ -25,7 +25,7 @@ mysql $UID $PWD -e 'SHOW GLOBAL VARIABLES' >> mysql-variables
 
 # start tcpdump
 tcpdumpstart=$(date +%F_%I)
-sudo tcpdump -s 65535 -x -nn -q -tttt -i any -c 1000 port 3306 >> ${tcpdumpstart}-tcpdump 2>/dev/null &
+sudo tcpdump -s 65535 -x -n -q -tttt -i any port 3306 >> ${tcpdumpstart}-tcpdump 2>/dev/null &
 
 # main loop
 while test -e $RUNFILE; do
