@@ -25,18 +25,33 @@ mysql $UID $PWD -e 'SHOW GLOBAL VARIABLES' >> mysql-variables
 
 # main loop
 while test -e $RUNFILE; do
+
+   # set filename prefix to YYYY-MM-DD_HH
    file=$(date +%F_%I)
+   # sleep until next observation period
    sleep=$(date +%s.%N | awk "{print $INTERVAL - (\$1 % $INTERVAL)}")
    sleep $sleep
+   # capture timestamp and load
    ts="$(date +"TS %s.%N %F %T")"
    loadavg="$(uptime)"
+   # capture MySQL status
    echo "$ts $loadavg" >> $PREFIX-${file}-status
    mysql $UID $PWD -e 'SHOW GLOBAL STATUS' >> $PREFIX-${file}-status &
+   # capture MySQL InnoDB status
    echo "$ts $loadavg" >> $PREFIX-${file}-innodbstatus
    mysql $UID $PWD -e 'SHOW ENGINE INNODB STATUS\G' >> $PREFIX-${file}-innodbstatus &
+   # capture MySQL process list
    echo "$ts $loadavg" >> $PREFIX-${file}-processlist
    mysql $UID $PWD -e 'SHOW FULL PROCESSLIST\G' >> $PREFIX-${file}-processlist &
+   # capture diskstats (note: no load info)
+   echo "$ts" >> $PREFIX-${file}-diskstats
+   cat /proc/diskstats >> $PREFIX-${file}-diskstats &
+   # capture lsof (open file information; note: TS at *END*)
+   lsof >> $PREFIX-${file}-lsof
+   echo "$ts $loadavg" >> $PREFIX-${file}-lsof
+   # echo timestamp to console before looping
    echo $ts
+
 done
 
 # otherwise print that runfile does not exist

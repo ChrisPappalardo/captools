@@ -1,0 +1,26 @@
+#!/bin/sh
+#
+# mbp-parse-lsof - parses lsof output from mbp-gather and prints total open mysql files in MB
+#
+# Copyright (C) 2014 by Chris Pappalardo (cpappala@yahoo.com)
+#
+# Some elements originally published in High Performance MySQL (3rd edition), Schwartz
+# Copyright (C) 2012 Baron Schwartz, et al
+
+# supply filenames on the command-line
+awk '
+   BEGIN {
+      printf "#ts date time load mysql_of_size\n"
+   }
+   /mysqld.*tmp/ { # add the size of all mysql tmp files
+      total += $7;
+   }
+   /^TS/ { # The timestamp lines begin with TS.
+      ts      = substr($2, 1, index($2, ".") - 1);
+      load    = NF - 2;
+      diff    = ts - prev_ts;
+      prev_ts = ts;
+      printf "%s %s %s %s %7.2f MB\n", ts, $3, $4, substr($load, 1, length($load)-1), total/1024/1024;
+      total   = 0;
+   }
+   ' "$@"
