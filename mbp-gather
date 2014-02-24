@@ -8,7 +8,7 @@
 # Copyright (C) 2012 Baron Schwartz, et al
 
 # set variables
-UID=${1:-$USER} # arg 1 or none
+UID=${1:-$USER} # arg 1 or current user name
 PWD=${2:-} # arg 2 or none
 if [ ! -z "$UID" ]; then
     UID="-u $UID"
@@ -23,9 +23,10 @@ RUNFILE=mbp-gather-runfile
 # get and store mysql config
 mysql $UID $PWD -e 'SHOW GLOBAL VARIABLES' >> mysql-variables
 
-# start tcpdump
+# start tcpdump (requires sudo privileges)
 tcpdumpstart=$(date +%F_%I)
 sudo tcpdump -s 65535 -x -n -q -tttt -i any port 3306 >> ${tcpdumpstart}-tcpdump 2>/dev/null &
+tcpdumppid=$!
 
 # main loop
 while test -e $RUNFILE; do
@@ -58,8 +59,8 @@ while test -e $RUNFILE; do
 
 done
 
-# end tcpdump
-sudo pkill -u root tcpdump
+# end tcpdump (again, requires sudo privileges)
+sudo kill $tcpdumppid
 
 # exit and print that runfile does not(no longer) exist(s)
 echo Exiting because $RUNFILE does not exist.

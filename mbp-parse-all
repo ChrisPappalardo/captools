@@ -1,0 +1,53 @@
+#!/bin/sh
+#
+# mbp-parse-all - parses all output from mbp-gather for analysis
+#
+# Copyright (C) 2014 by Chris Pappalardo (cpappala@yahoo.com)
+#
+# Some elements originally published in High Performance MySQL (3rd edition), Schwartz
+# Copyright (C) 2012 Baron Schwartz, et al
+
+# initialize variables
+SCRIPTDIR=$(dirname $0)
+INPUTDIR=$(pwd -P)
+OUTPUTDIR=$(pwd -P)
+MAXDEPTH="-maxdepth 1" # default is to process files in INPUTDIR only
+
+# get and process cli args
+while getopts "hi:o:r" arg; do
+    case $arg in
+	(i) INPUTDIR=$(echo "$OPTARG" | sed -e 's/\/$//');;
+	(o) OUTPUTDIR=$(echo "$OPTARG" | sed -e 's/\/$//');;
+	(r) MAXDEPTH="";;
+	(h) echo "\
+Usage:  $(basename $0) [-hr] [-i dir] [-o dir]
+Parse mbp-gather data into QPS, diskstats, lsof, query log profile reports
+Where:
+  -i  path containing data files (current by default)
+  -o  path where reports will be created (current by default)
+  -h  help (this)
+$(basename $0) will create filenames in the YYYY-MM-DD_HH-<dataParentDir>-<reportName> format.\
+"; exit 1;;
+    esac
+done
+
+# set report filenames to YYYY-MM-DD_HH-<INPUTDIR_parent>-<report_name>
+NAMEROOT=$(basename $INPUTDIR)
+QPS=$(find $INPUTDIR $MAXDEPTH -type f -name "*-status" | \
+    sort -d | grep -m 1 -E -o '[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}')-$NAMEROOT-QPS
+DISKSTATS=$(find $INPUTDIR $MAXDEPTH -type f -name "*-diskstats" | \
+    sort -d | grep -m 1 -E -o '[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}')-$NAMEROOT-diskstats
+LSOF=$(find $INPUTDIR $MAXDEPTH -type f -name "*-lsof" | \
+    sort -d | grep -m 1 -E -o '[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}')-$NAMEROOT-lsof
+QUERYPROFILE=$(find $INPUTDIR $MAXDEPTH -type f -name "*-tcpdump" | \
+    sort -d | grep -m 1 -E -o '[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}')-$NAMEROOT-queryprofile
+
+# generate reports
+echo "Generating $QPS"
+$SCRIPTDIR/mbp-parse-status $INPUTDIR/*-status > $OUTPUTDIR/$QPS
+echo "Generating $DISKSTATS for sda"
+pt-diskstats $INPUTDIR/*-diskstats | grep -E 'sda\s' > $OUTPUTDIR/$DISKSTATS
+echo "Generating $LSOF"
+$SCRIPTDIR/mbp-parse-lsof $INPUTDIR/*-lsof > $OUTPUTDIR/$LSOF
+echo "Generating $QUERYPROFILE"
+pt-query-digest --type tcpdump $INPUTDIR/*-tcpdump > $OUTPUTDIR/$QUERYPROFILE
