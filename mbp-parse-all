@@ -47,5 +47,9 @@ echo "Generating $NAMEROOT-diskstats for sda"
 pt-diskstats $INPUTDIR/*-diskstats | grep -E 'sda\s' > $OUTPUTDIR/$NAMEROOT-diskstats
 echo "Generating $NAMEROOT-lsof"
 $SCRIPTDIR/mbp-parse-lsof $INPUTDIR/*-lsof > $OUTPUTDIR/$NAMEROOT-lsof
-echo "Generating $NAMEROOT-queryprofile"
-pt-query-digest --type tcpdump $INPUTDIR/*-tcpdump > $OUTPUTDIR/$NAMEROOT-queryprofile
+echo "Generating $NAMEROOT-tcpdump-queryprofile"
+pt-query-digest --type tcpdump $INPUTDIR/*-tcpdump > $OUTPUTDIR/$NAMEROOT-tcpdump-queryprofile
+if [ -e $INPUTDIR/mysql-slow.log ]; then # mysql-slow.log will not always be available
+    echo "Generating $NAMEROOT-slow-queryprofile"
+    pt-query-digest $INPUTDIR/mysql-slow.log > $OUTPUTDIR/$NAMEROOT-slow-queryprofile
+fi
