@@ -10,7 +10,7 @@
 # supply filenames on the command-line
 awk '
    BEGIN {
-      printf "#ts date time load QPS";
+      printf "#ts date time load QPS queries threads_connected threads_running";
       fmt = " %.2f";
    }
    /^TS/ { # The timestamp lines begin with TS.
@@ -24,4 +24,7 @@ awk '
       printf fmt, ($2-Queries)/diff;
       Queries=$2
    }
+   /Threads_connected/{tc=$2}
+   /Threads_running/{printf " %5d %5d %5d", Queries, tc, $2}
+   END { printf "\n" }
    ' "$@"
