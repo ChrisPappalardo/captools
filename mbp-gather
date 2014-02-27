@@ -7,29 +7,46 @@
 # Some elements originally published in High Performance MySQL (3rd edition), Schwartz
 # Copyright (C) 2012 Baron Schwartz, et al
 
-# set variables
-UID=${1:-$USER} # arg 1 or current user name
-PWD=${2:-} # arg 2 or none
-if [ ! -z "$UID" ]; then
-    UID="-u $UID"
-fi
-if [ ! -z "$PWD" ]; then
-    PWD="-p$PWD"
-fi
+# script quits on any errors
+set -e
+
+# initialize variables
 INTERVAL=5
 PREFIX=$INTERVAL-sec-status
 RUNFILE=mbp-gather-runfile
+OUTPUTDIR=$(pwd -P)
+DBPASS=""
+DBUSER=$USER
+
+# get and process cli args
+while getopts "ho:p:u:" arg; do
+    case $arg in
+	h) echo "\
+Usage:  $(basename $0) [-h] [-o dir] [-p dbpass] [-u dbuser]
+$(basename $0) gathers benchmarking and profiling information from a MySQL server
+Where:
+  -h  help (this)
+  -o  path where data files will be created (current by default)
+  -p  sets db password
+  -u  dets db username
+"; exit 1;;
+	o) OUTPUTDIR=$(echo "$OPTARG" | sed -e 's/\/$//');;
+	p) DBPASS="-p$OPTARG";;
+	u) DBUSER=$OPTARG;;
+	*) echo "use -h for help"; exit 1;;
+    esac
+done
 
 # get and store mysql config
-mysql $UID $PWD -e 'SHOW GLOBAL VARIABLES' >> mysql-variables
+mysql -u $DBUSER $DBPASS -e 'SHOW GLOBAL VARIABLES' >> $OUTPUTDIR/mysql-variables
 
 # start tcpdump (requires sudo privileges)
 tcpdumpstart=$(date +%F_%I)
-sudo tcpdump -s 65535 -x -n -q -tttt -i any port 3306 >> ${tcpdumpstart}-tcpdump 2>/dev/null &
+sudo tcpdump -s 65535 -x -n -q -tttt -i any port 3306 >> $OUTPUTDIR/$tcpdumpstart-tcpdump 2>/dev/null &
 tcpdumppid=$!
 
 # main loop
-while test -e $RUNFILE; do
+while [ -e $OUTPUTDIR/$RUNFILE ]; do
 
    # set filename prefix to YYYY-MM-DD_HH
    file=$(date +%F_%I)
@@ -40,20 +57,20 @@ while test -e $RUNFILE; do
    ts="$(date +"TS %s.%N %F %T")"
    loadavg="$(uptime)"
    # capture MySQL status
-   echo "$ts $loadavg" >> $PREFIX-${file}-status
-   mysql $UID $PWD -e 'SHOW GLOBAL STATUS' >> $PREFIX-${file}-status &
+   echo "$ts $loadavg" >> $OUTPUTDIR/$PREFIX-$file-status
+   mysql -u $DBUSER $DBPASS -e 'SHOW GLOBAL STATUS' >> $OUTPUTDIR/$PREFIX-$file-status &
    # capture MySQL InnoDB status
-   echo "$ts $loadavg" >> $PREFIX-${file}-innodbstatus
-   mysql $UID $PWD -e 'SHOW ENGINE INNODB STATUS\G' >> $PREFIX-${file}-innodbstatus &
+   echo "$ts $loadavg" >> $OUTPUTDIR/$PREFIX-$file-innodbstatus
+   mysql -u $DBUSER $DBPASS -e 'SHOW ENGINE INNODB STATUS\G' >> $OUTPUTDIR/$PREFIX-$file-innodbstatus &
    # capture MySQL process list
-   echo "$ts $loadavg" >> $PREFIX-${file}-processlist
-   mysql $UID $PWD -e 'SHOW FULL PROCESSLIST\G' >> $PREFIX-${file}-processlist &
+   echo "$ts $loadavg" >> $OUTPUTDIR/$PREFIX-$file-processlist
+   mysql -u $DBUSER $DBPASS -e 'SHOW FULL PROCESSLIST\G' >> $OUTPUTDIR/$PREFIX-$file-processlist &
    # capture diskstats (note: no load info)
-   echo "$ts" >> $PREFIX-${file}-diskstats
-   cat /proc/diskstats >> $PREFIX-${file}-diskstats &
+   echo "$ts" >> $OUTPUTDIR/$PREFIX-$file-diskstats
+   cat /proc/diskstats >> $OUTPUTDIR/$PREFIX-$file-diskstats &
    # capture lsof (open file information; note: TS at *END*)
-   lsof >> $PREFIX-${file}-lsof
-   echo "$ts $loadavg" >> $PREFIX-${file}-lsof
+   lsof >> $OUTPUTDIR/$PREFIX-$file-lsof
+   echo "$ts $loadavg" >> $OUTPUTDIR/$PREFIX-$file-lsof
    # echo timestamp to console before looping
    echo $ts
 
@@ -63,4 +80,4 @@ done
 sudo kill $tcpdumppid
 
 # exit and print that runfile does not(no longer) exist(s)
-echo Exiting because $RUNFILE does not exist.
+echo "Exiting because $OUTPUTDIR/$RUNFILE does not exist."
