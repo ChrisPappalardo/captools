@@ -8,26 +8,32 @@
 # Copyright (C) 2012 Baron Schwartz, et al
 
 # initialize variables
-SCRIPTDIR=$(dirname $0)
+DBPASS=""
+DBUSER=$USER
 INPUTDIR=$(pwd -P)
-OUTPUTDIR=$(pwd -P)
 MAXDEPTH="-maxdepth 1" # default is to process files in INPUTDIR only
+OUTPUTDIR=$(pwd -P)
+SCRIPTDIR=$(dirname $0)
 
 # get and process cli args
-while getopts "hi:o:r" arg; do
+while getopts "hi:o:p:ru:" arg; do
     case $arg in
-	(i) INPUTDIR=$(echo "$OPTARG" | sed -e 's/\/$//');;
-	(o) OUTPUTDIR=$(echo "$OPTARG" | sed -e 's/\/$//');;
-	(r) MAXDEPTH="";;
-	(h) echo "\
-Usage:  $(basename $0) [-hr] [-i dir] [-o dir]
+	h) echo "\
+Usage:  $(basename $0) [-h] [-i dir] [-o dir] [-p password] [-r] [-u username]
 Parse mbp-gather data into QPS, diskstats, lsof, query log profile reports
 Where:
+  -h  help (this)
   -i  path containing data files (current by default)
   -o  path where reports will be created (current by default)
-  -h  help (this)
-$(basename $0) will create filenames in the YYYY-MM-DD_HH-<dataParentDir>-<reportName> format.\
-"; exit 1;;
+  -p  sets db password
+  -r  turns input file recursion on
+  -u  sets db username"; exit 1;;
+	i) INPUTDIR=$(echo "$OPTARG" | sed -e 's/\/$//');;
+	o) OUTPUTDIR=$(echo "$OPTARG" | sed -e 's/\/$//');;
+	p) DBPASS="-p$OPTARG";;
+	u) DBUSER=$OPTARG;;
+	r) MAXDEPTH="";;
+	*) echo "use -h for help"; exit 1;;
     esac
 done
 
@@ -49,7 +55,12 @@ echo "Generating $NAMEROOT-lsof"
 $SCRIPTDIR/mbp-parse-lsof $INPUTDIR/*-lsof > $OUTPUTDIR/$NAMEROOT-lsof
 echo "Generating $NAMEROOT-tcpdump-queryprofile"
 pt-query-digest --type tcpdump $INPUTDIR/*-tcpdump > $OUTPUTDIR/$NAMEROOT-tcpdump-queryprofile
+echo "Generating $NAMEROOT-unindexed-queries"
+pt-query-digest --type tcpdump --filter '($event->{No_index_used} eq "Yes" || $event->{No_good_index_used} eq "Yes")' \
+    $INPUTDIR/*-tcpdump > $OUTPUTDIR/$NAMEROOT-unindexed-queries
 if [ -e $INPUTDIR/mysql-slow.log ]; then # mysql-slow.log will not always be available
     echo "Generating $NAMEROOT-slow-queryprofile"
     pt-query-digest $INPUTDIR/mysql-slow.log > $OUTPUTDIR/$NAMEROOT-slow-queryprofile
+    echo "Generating $NAMEROOT-unused-indexes"
+    pt-index-usage -u $DBUSER $DBPASS $INPUTDIR/mysql-slow.log > $OUTPUTDIR/$NAMEROOT-unused-indexes
 fi
